@@ -11,6 +11,7 @@ from app.services.permission_type_service import (
 permission_type_bp = Blueprint("permission_type", __name__)
 
 # 🔹 Listar tipos de permiso
+@permission_type_bp.route("", methods=["GET"])
 @permission_type_bp.route("/", methods=["GET"])
 def list_permission_types():
     include_inactive = request.args.get("include_inactive", "0") == "1"
@@ -27,6 +28,7 @@ def get_permission_type(identifier):
     return jsonify(permission_type)
 
 # 🔹 Crear nuevo tipo de permiso
+@permission_type_bp.route("", methods=["POST"])
 @permission_type_bp.route("/", methods=["POST"])
 def create_permission_type():
     data = request.json
