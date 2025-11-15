@@ -1,0 +1,36 @@
+import { useState } from "react";
+import PermitList from "./components/PermitList";
+import PermitForm from "./components/PermitForm";
+import PermitView from "./components/PermitView";
+
+export default function PermitsPage() {
+  const [selectedPermit, setSelectedPermit] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [viewPermit, setViewPermit] = useState(null);
+
+  return (
+    <div className="p-6">
+      <h1 className="text-3xl font-bold mb-6">Boleta de Permisos</h1>
+
+      <PermitList
+        onEdit={(permit) => { setSelectedPermit(permit); setShowForm(true); }}
+        onView={(permit) => setViewPermit(permit)}
+        onCreate={() => { setSelectedPermit(null); setShowForm(true); }}
+      />
+
+      {showForm && (
+        <PermitForm
+          permit={selectedPermit}
+          onClose={() => setShowForm(false)}
+        />
+      )}
+
+      {viewPermit && (
+        <PermitView
+          permit={viewPermit}
+          onClose={() => setViewPermit(null)}
+        />
+      )}
+    </div>
+  );
+}
