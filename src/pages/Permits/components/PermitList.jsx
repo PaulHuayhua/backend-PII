@@ -20,7 +20,8 @@ export default function PermitList({ onEdit, onView, onCreate }) {
   // Cargar permisos
   const fetchPermits = async () => {
     try {
-      const res = await api.get("/permit_tickets/?include_inactive=1");
+      const res = await api.get("/permit_tickets/?include_cancelled=1");
+
       const mapped = res.data.map((p) => {
         const workerData = workers.find((w) => w.identifier === p.workers_identifier) || {};
         return {
@@ -32,6 +33,7 @@ export default function PermitList({ onEdit, onView, onCreate }) {
           },
         };
       });
+
       setPermits(mapped);
     } catch (err) {
       console.error("Error cargando permisos:", err);
@@ -39,14 +41,16 @@ export default function PermitList({ onEdit, onView, onCreate }) {
   };
 
   useEffect(() => { fetchWorkers(); }, []);
-  useEffect(() => { if(workers.length > 0) fetchPermits(); }, [workers]);
+  useEffect(() => { if (workers.length > 0) fetchPermits(); }, [workers]);
 
-  const handleToggleActive = async (permit) => {
-    const action = permit.active ? "eliminar" : "restaurar";
+  const handleToggleStatus = async (permit) => {
+    const isCancelled = permit.ticket_status === "Cancelado";
+    const action = isCancelled ? "restaurar" : "cancelar";
+
     if (!window.confirm(`¿Deseas ${action} este permiso?`)) return;
 
     try {
-      if (permit.active) {
+      if (!isCancelled) {
         await api.delete(`/permit_tickets/${permit.identifier}`);
       } else {
         await api.put(`/permit_tickets/restore/${permit.identifier}`);
@@ -59,13 +63,14 @@ export default function PermitList({ onEdit, onView, onCreate }) {
 
   const filteredPermits = permits.filter(p => {
     if (statusFilter === "all") return true;
-    if (statusFilter === "cancelled") return p.active === 0;
+    if (statusFilter === "cancelled") return p.ticket_status === "Cancelado";
     return p.ticket_status === statusFilter;
   });
 
   const getStatusColor = (permit) => {
-    const estado = permit.active === 0 ? "cancelled" : permit.ticket_status;
-    return estado === "cancelled" ? "bg-red-500"
+    const estado = permit.ticket_status;
+
+    return estado === "Cancelado" ? "bg-red-500"
       : estado === "Pendiente" ? "bg-gray-400"
       : estado === "Firmado por Jefe" ? "bg-blue-500"
       : estado === "Firmado por Administración" ? "bg-yellow-500"
@@ -75,6 +80,7 @@ export default function PermitList({ onEdit, onView, onCreate }) {
 
   return (
     <div className="border rounded-lg p-6 bg-white shadow-sm">
+
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold text-gray-800">Boleta de Permisos</h2>
         <button
@@ -113,26 +119,37 @@ export default function PermitList({ onEdit, onView, onCreate }) {
               <th className="py-2 px-3">Acciones</th>
             </tr>
           </thead>
+
           <tbody>
             {filteredPermits.length > 0 ? filteredPermits.map(p => (
-              <tr key={p.identifier} className={`border-b hover:bg-gray-50 transition-colors ${!p.active ? "opacity-50" : ""}`}>
+              <tr key={p.identifier}
+                  className={`border-b hover:bg-gray-50 transition-colors ${p.ticket_status === "Cancelado" ? "opacity-50" : ""}`}>
+                
                 <td className="py-3 px-5">{p.worker.name} {p.worker.last_name}</td>
                 <td className="py-3 px-5">{p.worker.area}</td>
                 <td className="py-3 px-5">{p.reason}</td>
                 <td className="py-3 px-5">{p.application_date ? new Date(p.application_date).toLocaleDateString() : "-"}</td>
+
                 <td className="py-3 px-5">
                   <span className={`px-4 py-2 text-sm font-semibold rounded-full text-white ${getStatusColor(p)}`}>
                     {p.ticket_status}
                   </span>
                 </td>
+
                 <td className="py-3 px-5 flex justify-center gap-2">
                   <button onClick={() => onView(p)} className="bg-blue-600 text-white p-2 rounded"><Eye size={18} /></button>
-                  {p.active && <button onClick={() => onEdit(p)} className="bg-yellow-500 text-white p-2 rounded"><Edit size={18} /></button>}
+
+                  {p.ticket_status !== "Cancelado" && (
+                    <button onClick={() => onEdit(p)} className="bg-yellow-500 text-white p-2 rounded">
+                      <Edit size={18} />
+                    </button>
+                  )}
+
                   <button
-                    onClick={() => handleToggleActive(p)}
-                    className={`${p.active ? "bg-red-500" : "bg-green-500"} text-white p-2 rounded`}
+                    onClick={() => handleToggleStatus(p)}
+                    className={`${p.ticket_status === "Cancelado" ? "bg-green-500" : "bg-red-500"} text-white p-2 rounded`}
                   >
-                    {p.active ? <Trash2 size={18} /> : <RefreshCw size={18} />}
+                    {p.ticket_status === "Cancelado" ? <RefreshCw size={18} /> : <Trash2 size={18} />}
                   </button>
                 </td>
               </tr>
@@ -146,6 +163,7 @@ export default function PermitList({ onEdit, onView, onCreate }) {
           </tbody>
         </table>
       </div>
+
     </div>
   );
 }

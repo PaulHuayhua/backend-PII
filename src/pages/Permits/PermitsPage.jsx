@@ -7,6 +7,7 @@ export default function PermitsPage() {
   const [selectedPermit, setSelectedPermit] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [viewPermit, setViewPermit] = useState(null);
+  const [reload, setReload] = useState(0); // <--- estado para recargar lista
 
   return (
     <div className="p-6">
@@ -16,12 +17,17 @@ export default function PermitsPage() {
         onEdit={(permit) => { setSelectedPermit(permit); setShowForm(true); }}
         onView={(permit) => setViewPermit(permit)}
         onCreate={() => { setSelectedPermit(null); setShowForm(true); }}
+        reload={reload} // <--- pasar reload
       />
 
       {showForm && (
         <PermitForm
           permit={selectedPermit}
           onClose={() => setShowForm(false)}
+          onSaved={() => { 
+            setReload(prev => prev + 1); // <--- fuerza recarga de listado
+            setShowForm(false);
+          }}
         />
       )}
 
