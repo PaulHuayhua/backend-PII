@@ -8,10 +8,7 @@ from datetime import datetime, time
 # ============================================================
 
 def parse_date(value):
-    """
-    Convierte un valor en un objeto date.
-    Acepta datetime.date, datetime.datetime o string 'YYYY-MM-DD'.
-    """
+    """Convierte string o datetime en date."""
     if not value:
         return None
     if isinstance(value, datetime):
@@ -20,14 +17,7 @@ def parse_date(value):
 
 
 def parse_time_str(value):
-    """
-    Convierte un string o time en datetime.
-    Acepta:
-        - "HH:MM"
-        - "HH:MM:SS"
-        - "YYYY-MM-DD HH:MM:SS"
-        - datetime o time
-    """
+    """Convierte string o time en datetime."""
     if not value:
         return None
 
@@ -39,49 +29,107 @@ def parse_time_str(value):
 
     if isinstance(value, str):
         value = value.strip()
-        for fmt in ("%H:%M", "%H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+
+        formats = [
+            "%H:%M",
+            "%H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%d %H:%M:%S"
+        ]
+
+        for fmt in formats:
             try:
                 return datetime.strptime(value, fmt)
             except ValueError:
-                continue
+                pass
 
-    raise ValueError("Invalid time format. Use HH:MM, HH:MM:SS, or YYYY-MM-DDTHH:MM:SS")
+    raise ValueError("Invalid time format")
+
+
+def convert_empty_to_none(data):
+    """
+    Convierte strings vacíos "" a None.
+    (Muy útil cuando el frontend usa FormData)
+    """
+    for k, v in data.items():
+        if isinstance(v, str) and v.strip() == "":
+            data[k] = None
+    return data
+
+
+def convert_numeric_fields(data):
+    """Convierte campos numéricos enviados como strings."""
+    numeric_fields = [
+        "worker_id",
+        "permission_type_id",
+        "duration_hours"
+    ]
+
+    for f in numeric_fields:
+        if f in data and data[f] not in (None, ""):
+            try:
+                data[f] = float(data[f])
+            except ValueError:
+                pass
+
+    return data
+
+
+def convert_boolean_fields(data):
+    """Convierte '0'/'1' → False/True"""
+    boolean_fields = [
+        "is_half_day",
+        "is_all_day"
+    ]
+
+    for f in boolean_fields:
+        if f in data:
+            if str(data[f]).strip() == "1":
+                data[f] = True
+            elif str(data[f]).strip() == "0":
+                data[f] = False
+
+    return data
 
 
 # ============================================================
 # CRUD
 # ============================================================
 
-def get_all():
-    return [t.to_dict() for t in PermitTicket.query.all()]
+def get_all(include_cancelled=False):
+    """Retorna todos los tickets (filtro opcional de cancelados)."""
+    query = PermitTicket.query
+
+    if not include_cancelled:
+        query = query.filter(PermitTicket.ticket_status != "Cancelado")
+
+    return [t.to_dict() for t in query.all()]
 
 
 def get_by_id(identifier):
+    """Retorna un dict con los datos."""
     ticket = PermitTicket.query.get(identifier)
     return ticket.to_dict() if ticket else None
 
 
-def create(data):
-    # Parsear fechas y horas
-    data["application_date"] = parse_date(data.get("application_date"))
-    data["start_time"] = parse_time_str(data.get("start_time"))
-    data["end_time"] = parse_time_str(data.get("end_time"))
-
-    # Asignar created_at si no viene
-    data["created_at"] = parse_time_str(data.get("created_at")) or datetime.now()
-
-    ticket = PermitTicket(**data)
-    db.session.add(ticket)
-    db.session.commit()
-    return ticket.to_dict()
+def get_model_by_id(identifier):
+    """Retorna el objeto del modelo."""
+    return PermitTicket.query.get(identifier)
 
 
-def update(identifier, data):
-    ticket = PermitTicket.query.get(identifier)
-    if not ticket:
-        return None
+def prepare_data(data):
+    """Normaliza datos provenientes de JSON o FormData."""
 
-    # Parsear fechas y horas si vienen en el update
+    # Convertir "" → None
+    data = convert_empty_to_none(data)
+
+    # Convertir a numérico
+    data = convert_numeric_fields(data)
+
+    # Booleanos
+    data = convert_boolean_fields(data)
+
+    # Fechas y horas
     if "application_date" in data:
         data["application_date"] = parse_date(data["application_date"])
 
@@ -91,8 +139,27 @@ def update(identifier, data):
     if "end_time" in data:
         data["end_time"] = parse_time_str(data["end_time"])
 
-    if "created_at" in data:
-        data["created_at"] = parse_time_str(data["created_at"])
+    return data
+
+
+def create(data):
+    """Crea un ticket nuevo."""
+    data = prepare_data(data)
+
+    ticket = PermitTicket(**data)
+    db.session.add(ticket)
+    db.session.commit()
+
+    return ticket.to_dict()
+
+
+def update(identifier, data):
+    """Actualiza un ticket."""
+    ticket = PermitTicket.query.get(identifier)
+    if not ticket:
+        return None
+
+    data = prepare_data(data)
 
     for key, val in data.items():
         setattr(ticket, key, val)
@@ -101,10 +168,31 @@ def update(identifier, data):
     return ticket.to_dict()
 
 
+# ============================================================
+# DELETE (Cancelación lógica)
+# ============================================================
+
 def delete(identifier):
+    """Cancela un ticket sin borrarlo físicamente."""
     ticket = PermitTicket.query.get(identifier)
     if not ticket:
         return False
-    db.session.delete(ticket)
+
+    ticket.ticket_status = "Cancelado"
+    db.session.commit()
+    return True
+
+
+# ============================================================
+# RESTORE
+# ============================================================
+
+def restore(identifier):
+    """Restaura un ticket previamente cancelado."""
+    ticket = PermitTicket.query.get(identifier)
+    if not ticket:
+        return False
+
+    ticket.ticket_status = "Pendiente"
     db.session.commit()
     return True

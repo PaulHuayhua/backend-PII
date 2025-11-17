@@ -1,6 +1,7 @@
 from app import db
 from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
+from datetime import datetime
 
 class PermitTicket(db.Model):
     __tablename__ = 'permit_ticket'
@@ -15,7 +16,7 @@ class PermitTicket(db.Model):
     area_manager_signature = Column(String(200), nullable=False)
     worker_signature = Column(String(200), nullable=False)
     admin_approval = Column(String(1), nullable=False)
-    created_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     ticket_status = Column(String(50), nullable=False)
 
     permission_type_identifier = Column(Integer, ForeignKey('permission_type.identifier'), nullable=False)
